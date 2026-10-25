@@ -1,6 +1,6 @@
 /* Sunpack app — keeps the app shell (this page, icons) on the phone so it opens instantly and shows a message when offline.
    The portal itself always loads live from Google, so every update reaches everyone at once. */
-const CACHE = 'sunpack-shell-v2';
+const CACHE = 'sunpack-shell-v3';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './favicon-32.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== CACHE).map(x => caches.delete(x)))).then(() => self.clients.claim())); });

@@ -83,6 +83,7 @@
     try { vRec && vRec.abort(); } catch (x) {}
     let fin = '', bad = false; const r = vRec = new SR(); r.lang = (e.data.sunpackVoice && e.data.sunpackVoice.lang) || 'hi-IN'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
     r.onresult = ev => { let s = ''; for (let i = ev.resultIndex; i < ev.results.length; i++) { if (ev.results[i].isFinal) fin += ev.results[i][0].transcript + ' '; else s += ev.results[i][0].transcript; } send({ interim: fin + s }); };
+    r.onstart = () => send({ started: 1 });   // the portal knows the mic is on
     r.onerror = ev => { bad = true; if (ev.error !== 'aborted') send({ err: ev.error }); };
     r.onend = () => { if (vRec === r) vRec = null; if (!bad) send({ final: fin }); };
     try { r.start(); } catch (x) { send({ err: x.message }); }
