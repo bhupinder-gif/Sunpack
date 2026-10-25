@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sunpack — Speak</title>
+<meta name="theme-color" content="#0f2547">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<style>
+  body { margin: 0; min-height: 100vh; box-sizing: border-box; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+    background: #0f2547; color: #fff; font: 16px system-ui, sans-serif; }
+  .mic { width: 96px; height: 96px; border-radius: 50%; border: 0; background: #dc2626; color: #fff; font-size: 44px; cursor: pointer; }
+  .on { animation: p 1.2s infinite; } @keyframes p { 0% { box-shadow: 0 0 0 0 rgba(220,38,38,.6); } 70% { box-shadow: 0 0 0 22px rgba(220,38,38,0); } }
+  #t { margin: 18px 0 6px; font-size: 20px; min-height: 28px; max-width: 420px; }
+  #m { color: #cdd8ea; font-size: 14px; max-width: 380px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<button class="mic" id="b" title="Speak">🎤</button>
+<div id="t">Listening…</div>
+<div id="m">Speak now. This window closes by itself and the words go into the portal form.</div>
+<script>
+  /* Sunpack portal "Speak to fill": Google's portal frame has no microphone permission, so the portal opens this small page
+     to listen. Only the spoken text is sent back to the portal window that opened it. Nothing is stored. */
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition, q = new URLSearchParams(location.search), lang = q.get('lang') || 'hi-IN';
+  const b = document.getElementById('b'), t = document.getElementById('t'), m = document.getElementById('m');
+  const send = d => { try { if (window.opener) window.opener.postMessage({ sunpackVoiceRes: d }, '*'); } catch (e) {} };
+  let rec = null;
+  function go() {
+    if (!SR) { t.textContent = 'This browser cannot listen'; m.textContent = 'Please use Google Chrome.'; send({ err: 'nosupport' }); return; }
+    try { rec && rec.abort(); } catch (e) {}
+    let fin = '', bad = false; const r = rec = new SR(); r.lang = lang; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+    r.onstart = () => { b.classList.add('on'); t.textContent = 'Listening…'; m.textContent = 'Speak now.'; };
+    r.onresult = ev => { let s = ''; for (let i = ev.resultIndex; i < ev.results.length; i++) { if (ev.results[i].isFinal) fin += ev.results[i][0].transcript + ' '; else s += ev.results[i][0].transcript; } t.textContent = fin + s; send({ interim: fin + s }); };
+    r.onerror = ev => { bad = true; b.classList.remove('on'); const blocked = ev.error === 'not-allowed' || ev.error === 'service-not-allowed';
+      t.textContent = blocked ? 'Microphone blocked' : ev.error === 'no-speech' ? 'Nothing heard' : 'Mic error: ' + ev.error;
+      m.textContent = blocked ? 'Tap 🔒 in the address bar → Microphone → Allow, then tap 🎤.' : 'Tap 🎤 to try again.';
+      if (ev.error !== 'no-speech' && ev.error !== 'aborted') send({ err: ev.error }); };
+    r.onend = () => { b.classList.remove('on'); if (bad) return; send({ final: fin });
+      if (fin.trim()) { t.textContent = '✓ ' + fin; m.textContent = 'Done — back to the form.'; setTimeout(() => window.close(), 700); }
+      else { t.textContent = 'Nothing heard'; m.textContent = 'Tap 🎤 to try again.'; } };
+    try { r.start(); } catch (e) { t.textContent = 'Could not start: ' + e.message; }
+  }
+  b.onclick = go; go();
+</script>
+</body>
+</html>

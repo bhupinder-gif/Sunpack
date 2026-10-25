@@ -47,7 +47,7 @@
   <div class="fp"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round"><path d="M12 11v3a8 8 0 0 1-1.5 4.7M8.5 7.6A5 5 0 0 1 17 11v1.5M7 11a5 5 0 0 1 .4-2M7 14.5c.6-1 1-2.2 1-3.5a4 4 0 0 1 8 0v1M15.8 16.5a13 13 0 0 0 .2-2M12.2 19.8c.6-1 1.1-2.2 1.4-3.4M5.5 17.2A9 9 0 0 0 7 14M4 12a8 8 0 0 1 14.8-4.2M20 12c0 .9-.1 1.8-.3 2.6"/></svg></div>
   <button class="go" id="lkGo">Unlock</button><button class="later" id="lkLater">Not now</button>
   <div class="err" id="lkErr"></div></div>
-<iframe id="app" title="Sunpack Portal" allow="clipboard-write; camera; geolocation" referrerpolicy="no-referrer-when-downgrade"></iframe>
+<iframe id="app" title="Sunpack Portal" allow="clipboard-write; camera; geolocation; microphone" referrerpolicy="no-referrer-when-downgrade"></iframe>
 <div id="offline"><button onclick="location.reload()">Retry</button>No internet connection. The portal needs internet to load.</div>
 <script>
   /* The live portal (Google Apps Script web app). Every module opens inside this app. */
@@ -71,7 +71,22 @@
     if (!fromPortal(e) || !e.data) return;
     if (e.data.sunpackGo) go(e.data.sunpackGo);
     if (typeof e.data.sunpackToken === 'string') ls.set('sp_tk', e.data.sunpackToken || null);   // signed in / signed out inside the portal
+    if (e.data.sunpackVoice) voiceStart(e);
+    if (e.data.sunpackVoiceStop) { try { vRec && vRec.abort(); } catch (x) {} vRec = null; }
   });
+  /* 🎤 Speak to fill: Google's portal frame has no microphone permission, so this app listens and sends only the text back */
+  let vRec = null;
+  function voiceStart(e) {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition, src = e.source, org = e.origin;
+    const send = d => { try { src.postMessage({ sunpackVoiceRes: d }, org); } catch (x) {} };
+    if (!SR) return send({ err: 'nosupport' });
+    try { vRec && vRec.abort(); } catch (x) {}
+    let fin = '', bad = false; const r = vRec = new SR(); r.lang = (e.data.sunpackVoice && e.data.sunpackVoice.lang) || 'hi-IN'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+    r.onresult = ev => { let s = ''; for (let i = ev.resultIndex; i < ev.results.length; i++) { if (ev.results[i].isFinal) fin += ev.results[i][0].transcript + ' '; else s += ev.results[i][0].transcript; } send({ interim: fin + s }); };
+    r.onerror = ev => { bad = true; if (ev.error !== 'aborted') send({ err: ev.error }); };
+    r.onend = () => { if (vRec === r) vRec = null; if (!bad) send({ final: fin }); };
+    try { r.start(); } catch (x) { send({ err: x.message }); }
+  }
   const start = new URLSearchParams(location.search); const lockCmd = start.get('lock'); ['source', 'lock'].forEach(k => start.delete(k)); start.delete('tk');
   let opened = false;
   const openPortal = () => { lockEl.classList.remove('on'); if (!opened) { opened = true; go(BASE + (start.toString() ? '?' + start.toString() : ''), true); } };
