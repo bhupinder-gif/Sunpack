@@ -61,14 +61,17 @@
     if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec/.test(x.href) || x.href.split('?')[0] !== BASE) { window.open(x.href, '_blank', 'noopener'); return; }
     x.searchParams.set('shell', '1');
     const tk = ls.get('sp_tk'); if (tk) x.searchParams.set('tk', tk); else x.searchParams.delete('tk');   // the saved login travels with every module
-    splash.classList.remove('hide'); clearTimeout(timer); timer = setTimeout(() => splash.classList.add('hide'), 12000);
+    splash.classList.remove('hide'); clearTimeout(timer); timer = setTimeout(() => splash.classList.add('hide'), 25000);
     frame.src = x.href;
     if (!keepUrl) { const q = new URLSearchParams(x.search); q.delete('shell'); q.delete('tk'); const s = q.toString(); history.replaceState(null, '', location.pathname + (s ? '?' + s : '')); }
   }
-  frame.addEventListener('load', () => { clearTimeout(timer); setTimeout(() => splash.classList.add('hide'), 250); });
+  /* keep the Sunpack splash until the module is really drawn (the portal says "ready"), instead of a blank white screen; 9 s fallback */
+  const ready = () => { clearTimeout(timer); setTimeout(() => splash.classList.add('hide'), 120); };
+  frame.addEventListener('load', () => { clearTimeout(timer); timer = setTimeout(() => splash.classList.add('hide'), 9000); });
   const fromPortal = e => /^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(e.origin);
   window.addEventListener('message', e => {
     if (!fromPortal(e) || !e.data) return;
+    if (e.data.sunpackReady) ready();
     if (e.data.sunpackGo) go(e.data.sunpackGo);
     if (typeof e.data.sunpackToken === 'string') ls.set('sp_tk', e.data.sunpackToken || null);   // signed in / signed out inside the portal
     if (e.data.sunpackVoice) voiceStart(e);
