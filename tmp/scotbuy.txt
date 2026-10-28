@@ -1,0 +1,48 @@
+
+/* ===================== SCOT BUYING PATTERN (28-Oct-2026, Bhupinder Sir) =====================
+ * Bills of the last 6 months from ORIGINAL (general) Tally (CRM → SCOT → 📥 Tally box, file or paste; refreshed weekly)
+ * + portal sale orders after the last Tally bill. Per party: bills in 6 months, avg per month, usual gap, last bill, last 30 days.
+ * CRM calls a party when EITHER  last-30-days purchase < its 6-month monthly average  OR  days since last bill > its usual gap.
+ * Not called: billed in the last 7 days · order in the pipeline · contacted (call logged) in the last 7 days.
+ * No bill in 6 months = "Inactive" (stays on SCOT in grey, never in the call list). */
+let SCOT_BUY_MEMO_ = null;
+function scotDay_(t) { return Math.floor((t + 19800000) / 864e5); }          // IST day number
+function scotDate_(d) { return new Date(d * 864e5 - 19800000); }              // day number → IST midnight
+function scotBillsSave_(bills) {
+  const B = {}; let to = 0, from = 1e9;
+  bills.forEach(b => { const k = normName_(b.party), d = scotDay_(b.d.getTime()); (B[k] = B[k] || []).push([d, Math.round(b.v)]); to = Math.max(to, d); from = Math.min(from, d); });
+  propJsonPut_('TALLY_BILLS_', { at: Date.now(), from, to, B });
+  SCOT_BUY_MEMO_ = null;
+  return Object.keys(B).length;
+}
+function scotBuy_() {
+  if (SCOT_BUY_MEMO_) return SCOT_BUY_MEMO_;
+  const T = propJsonGet_('TALLY_BILLS_'), B = T.B || {}, to = T.to || 0, today = scotDay_(Date.now()), all = {};
+  Object.keys(B).forEach(k => all[k] = B[k].slice());
+  try {   // portal sale orders after the last Tally bill date (one order = one bill)
+    const so = {}; crmO2dRows_().infos.forEach(i => { if (i.cancelled || !(i.tsD instanceof Date)) return; const d = scotDay_(i.tsD.getTime()); if (d <= to) return;
+      const k = normName_(i.customer), o = so[k + '|' + i.so] = so[k + '|' + i.so] || { k, d, v: 0 }; o.v += num_(i.amt); if (d < o.d) o.d = d; });
+    Object.values(so).forEach(o => (all[o.k] = all[o.k] || []).push([o.d, Math.round(o.v)]));
+  } catch (e) { console.log('scot buy portal: ' + e); }
+  const S = {};
+  Object.keys(all).forEach(k => {
+    const W = all[k].filter(b => b[0] > today - 182 && b[0] <= today), lastAll = Math.max(0, ...all[k].map(b => b[0]));
+    if (!W.length) { S[k] = { n6: 0, status: 'Inactive', call: false, lastD: lastAll ? scotDate_(lastAll) : '' }; return; }
+    const sum = W.reduce((s, b) => s + b[1], 0), days = [...new Set(W.map(b => b[0]))].sort((a, b) => a - b);
+    let gap = ''; if (days.length > 1) gap = Math.max(1, Math.round((days[days.length - 1] - days[0]) / (days.length - 1)));
+    const last = days[days.length - 1], since = today - last, last30 = W.filter(b => b[0] > today - 30).reduce((s, b) => s + b[1], 0);
+    const avgMonth = sum / 6, pct = avgMonth ? Math.round(last30 / avgMonth * 100) : 0;
+    const below = last30 < avgMonth, overdue = !!gap && since > gap, recent = since < 7;
+    const status = recent ? 'Just billed' : below && overdue ? 'Overdue & below avg' : overdue ? 'Overdue' : below ? 'Below avg' : 'On track';
+    S[k] = { n6: W.length, perMonth: Math.round(W.length / 6 * 10) / 10, avgBill: Math.round(sum / W.length), avgMonth: Math.round(avgMonth), gap, since, last30: Math.round(last30), pct,
+      below, overdue, call: (below || overdue) && !recent, status, lastD: scotDate_(last) };
+  });
+  SCOT_BUY_MEMO_ = { S, at: T.at || 0, to: to ? scotDate_(to) : null };
+  return SCOT_BUY_MEMO_;
+}
+function scotBuyOf_(name) { const b = scotBuy_().S[normName_(name)]; return b || { n6: 0, status: 'Inactive', call: false, lastD: '' }; }
+/* text for CRM staff (no ₹) */
+function scotBuyMeta_(b) {
+  if (!b || !b.n6) return 'Inactive — no bill in the last 6 months';
+  return [b.perMonth + ' bill' + (b.perMonth === 1 ? '' : 's') + ' a month usually', 'last 30 days ' + b.pct + '% of usual', b.gap ? 'buys every ~' + b.gap + ' days' : '', 'last bill ' + b.since + ' day' + (b.since === 1 ? '' : 's') + ' ago'].filter(String).join(' · ');
+}
