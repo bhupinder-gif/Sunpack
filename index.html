@@ -49,15 +49,22 @@
   <div class="fp"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round"><path d="M12 11v3a8 8 0 0 1-1.5 4.7M8.5 7.6A5 5 0 0 1 17 11v1.5M7 11a5 5 0 0 1 .4-2M7 14.5c.6-1 1-2.2 1-3.5a4 4 0 0 1 8 0v1M15.8 16.5a13 13 0 0 0 .2-2M12.2 19.8c.6-1 1.1-2.2 1.4-3.4M5.5 17.2A9 9 0 0 0 7 14M4 12a8 8 0 0 1 14.8-4.2M20 12c0 .9-.1 1.8-.3 2.6"/></svg></div>
   <button class="go" id="lkGo">Unlock</button><button class="later" id="lkLater">Not now</button>
   <div class="err" id="lkErr"></div></div>
-<div id="box"><iframe id="app" title="Sunpack Portal" allow="clipboard-write; camera; geolocation; microphone" referrerpolicy="no-referrer-when-downgrade"></iframe></div>
+<div id="box"><iframe id="app" title="Sunpack" allow="clipboard-write; camera; geolocation; microphone" referrerpolicy="no-referrer-when-downgrade"></iframe></div>
 <div id="offline"><button onclick="location.reload()">Retry</button>No internet connection. The portal needs internet to load.</div>
 <script>
   /* The live portal (Google Apps Script web app). Every module opens inside this app. */
   const BASE = 'https://script.google.com/macros/s/AKfycbx5S1K7UHo1G6y0o2MPoyiBqztkc7vpqUx-vRFJ1-7peyBrmRYxWU2bQhLHde-MZH0t/exec';
+  /* Launch (Nov 2026): the app now opens the new fast Sunpack app; old portal links (?app=x) open the same screen there */
+  const APP = 'https://sunpack.pages.dev';
+  const toApp = h => { try { const u = new URL(h); if (u.origin === APP) return u.href; if (/^https:\/\/script\.google\.com\//.test(u.href)) { const a = u.searchParams.get('app'); return APP + '/' + (a && /^\w+$/.test(a) ? a : ''); } } catch (e) {} return ''; };
   const frame = document.getElementById('app'), splash = document.getElementById('splash'), off = document.getElementById('offline');
   let timer = null;
   const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} } };
   function go(u, keepUrl) {
+    const n = toApp(new URL(String(u || ''), APP + '/').href);
+    if (!n) { try { window.open(new URL(String(u || ''), APP + '/').href, '_blank', 'noopener'); } catch (e) {} return; }
+    splash.classList.remove('hide'); clearTimeout(timer); timer = setTimeout(() => splash.classList.add('hide'), 25000);
+    frame.src = n; return;
     let x; try { x = new URL(String(u || ''), BASE); } catch (e) { return; }
     x = new URL(x.href.replace(/\/a\/macros\/[^/]+\//, '/macros/').replace(/\/a\/[^/]+\/macros\//, '/macros/'));   // domain-only links → the open link
     if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec/.test(x.href) || x.href.split('?')[0] !== BASE) { window.open(x.href, '_blank', 'noopener'); return; }
@@ -70,7 +77,7 @@
   /* keep the Sunpack splash until the module is really drawn (the portal says "ready"), instead of a blank white screen; 9 s fallback */
   const ready = () => { clearTimeout(timer); setTimeout(() => splash.classList.add('hide'), 120); };
   frame.addEventListener('load', () => { clearTimeout(timer); timer = setTimeout(() => splash.classList.add('hide'), 9000); });
-  const fromPortal = e => /^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(e.origin);
+  const fromPortal = e => e.origin === APP || /^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(e.origin);
   window.addEventListener('message', e => {
     if (!fromPortal(e) || !e.data) return;
     if (e.data.sunpackReady) ready();
@@ -95,7 +102,7 @@
   }
   const start = new URLSearchParams(location.search); const lockCmd = start.get('lock'); ['source', 'lock'].forEach(k => start.delete(k)); start.delete('tk');
   let opened = false;
-  const openPortal = () => { lockEl.classList.remove('on'); if (!opened) { opened = true; go(BASE + (start.toString() ? '?' + start.toString() : ''), true); } };
+  const openPortal = () => { lockEl.classList.remove('on'); if (!opened) { opened = true; go(BASE + (start.toString() ? '?' + start.toString() : ''), true); } };   // BASE?app=x → the same screen in the new app
 
   /* ---------- Fingerprint / face lock (phone's own screen-lock: fingerprint, face or PIN) ----------
      The phone checks the finger / face itself; this app only gets "yes, it is the owner". Turned on once per phone. */
